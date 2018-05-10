@@ -4,25 +4,21 @@
 
 #define PROGRAM_NAME   "Maze"
 
-#define MAP_WIDTH  5
-#define MAP_HEIGHT 5
-
-#define TILE_SIZE   64
-#define WALL_HEIGHT 64
+#define MAP_WIDTH  16
+#define MAP_HEIGHT 16
 
 #define FIELD_OF_VIEW         60
 #define FRAMES_PER_SECOND     60
-#define DEFAULT_SCREEN_WIDTH  640
-#define DEFAULT_SCREEN_HEIGHT 480
+#define DEFAULT_SCREEN_WIDTH  320
+#define DEFAULT_SCREEN_HEIGHT 200
 
 #define RADIAN(x) ((x) * M_PI/180.f)
 
 #define MAX(x,y) (((x)>(y))? (x) : (y))
 #define MIN(x,y) (((x)<(y))? (x) : (y))
-#define CLAMP(lo, x, hi) MIN(MAX(lo, x), hi)
 
 struct actor {
-    float x, y, theta, height, turn_speed, move_speed;
+    float x, y, theta, turn_speed, move_speed;
 };
 
 struct state {
@@ -38,16 +34,34 @@ struct state {
 };
 
 static int map[] = {
-    1, 1, 1, 1, 1,
-    1, 0, 0, 0, 1,
-    1, 0, 1, 0, 1,
-    1, 0, 0, 0, 1,
-    1, 1, 1, 1, 1
+    1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,1,1,1,1,0,0,1,1,1,
+    1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 };
 
 static void
 fill_column ( Uint32 *buf, int bufw, Uint32 colour, int x, int y, int len ) {
     for ( int i = y; i < y+len; i++ ) { buf[x + i*bufw] = colour; }
+}
+
+static int
+empty_cell ( int x, int y ) {
+    // assume that any cell that is out of bounds is empty
+    if ( x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT ) return 1;
+    return map[ x + MAP_WIDTH*y ] == 0;
 }
 
 static void
@@ -59,14 +73,16 @@ static void
 strafe ( struct actor *actor, int dir ) {
     float dx = cos(RADIAN(actor->theta + 90)) * actor->move_speed * dir;
     float dy = sin(RADIAN(actor->theta + 90)) * actor->move_speed * dir;
-    actor->x += dx; actor->y += dy;
+    if ( empty_cell( actor->x+dx, actor->y ) ) { actor->x += dx; }
+    if ( empty_cell( actor->x, actor->y+dy ) ) { actor->y += dy; }
 }
 
 static void
 move ( struct actor *actor, int dir ) {
     float dx = cos(RADIAN(actor->theta)) * actor->move_speed * dir;
     float dy = sin(RADIAN(actor->theta)) * actor->move_speed * dir;
-    actor->x += dx; actor->y += dy;
+    if ( empty_cell( actor->x+dx, actor->y ) ) { actor->x += dx; }
+    if ( empty_cell( actor->x, actor->y+dy ) ) { actor->y += dy; }
 }
 
 static int
@@ -83,9 +99,8 @@ initialize ( struct state *s ) {
     s->player.x          = 1.5f;
     s->player.y          = 1.5f;
     s->player.theta      = 0.0f;
-    s->player.move_speed = 0.000015;
-    s->player.turn_speed = 0.0007f;
-    s->player.height     = 32;
+    s->player.move_speed = 0.15;
+    s->player.turn_speed = 2.0f;
 
     // Initialize SDL so we can use it
     if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 ) {
@@ -138,9 +153,9 @@ handle_events ( struct state *s ) {
         }
     }
     
-    move(&s->player, keyboard[SDL_SCANCODE_W] - keyboard[SDL_SCANCODE_S]);    
-    strafe(&s->player, keyboard[SDL_SCANCODE_D] - keyboard[SDL_SCANCODE_A]);
+    move(&s->player, keyboard[SDL_SCANCODE_W] - keyboard[SDL_SCANCODE_S]);        
     turn(&s->player, keyboard[SDL_SCANCODE_RIGHT]-keyboard[SDL_SCANCODE_LEFT]);
+    strafe(&s->player, keyboard[SDL_SCANCODE_D] - keyboard[SDL_SCANCODE_A]);
 }
 
 static void
@@ -154,35 +169,24 @@ render ( struct state *s ) {
     
     float a = s->player.theta - FIELD_OF_VIEW/2;
     float da = (float) FIELD_OF_VIEW/s->screen_width;
+    float max_ray = MAP_HEIGHT;
+    float ray_step = (float)1.0f/128;
 
     // cast rays
-    for ( int i=0; i < s->screen_width; i++, a += da ) {        
-        float len_ray = (float)TILE_SIZE/128;
-        float dx = cos(RADIAN(a)) * len_ray;
-        float dy = sin(RADIAN(a)) * len_ray;
-        float x = s->player.x * TILE_SIZE, y = s->player.y * TILE_SIZE;
+    for ( int i=0; i < s->screen_width; i++, a += da ) {                
+        float dx = cos(RADIAN(a)) * ray_step;
+        float dy = sin(RADIAN(a)) * ray_step;
+        float x = s->player.x, y = s->player.y;
         float dist = 0;
 
-        for (;;) {
-            int gridx = x/TILE_SIZE, gridy = y/TILE_SIZE;
-
-            if ( gridx < 0 || gridx >= MAP_WIDTH || 
-                    gridy < 0 || gridy >= MAP_HEIGHT ) {
-                dist = -1;
-                break;
-            }
-
-            if ( map[ gridx + gridy*MAP_WIDTH ] != 0 ) {
-                break;
-            }
-
+        while ( dist < max_ray && empty_cell( x, y ) ) {            
             x += dx; y += dy;            
-            dist += len_ray;
+            dist += ray_step;
         }
 
         // only render if ray hit something
-        if ( dist >= 0 ) { 
-            int height = s->screen_height/MAX(1.0f, dist/TILE_SIZE);
+        if ( dist < max_ray ) { 
+            int height = s->screen_height/MAX(1.0f, dist);
             int wall_top = (s->screen_height - height)/2;
             fill_column( pixels, s->screen_width, 0xFF, i, wall_top, height );
         };
@@ -214,8 +218,8 @@ main ( int argc, char *argv[] ) {
 
     Uint32 start = SDL_GetTicks();
     while (!s.quit) {
-        handle_events(&s);
         if ( (SDL_GetTicks() - start) > 1000/FRAMES_PER_SECOND     ) {
+            handle_events(&s);
             render(&s);
             start = SDL_GetTicks();
         }
