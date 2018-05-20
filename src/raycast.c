@@ -4,13 +4,15 @@
 
 #define PROGRAM_NAME   "Maze"
 
-#define MAP_WIDTH  16
-#define MAP_HEIGHT 16
+#define MAP_WIDTH  24
+#define MAP_HEIGHT 24
 
 #define FIELD_OF_VIEW         60
 #define FRAMES_PER_SECOND     60
-#define DEFAULT_SCREEN_WIDTH  320
-#define DEFAULT_SCREEN_HEIGHT 200
+#define MS_PER_FRAME          (1000/FRAMES_PER_SECOND)
+#define DEFAULT_SCREEN_WIDTH  640
+#define DEFAULT_SCREEN_HEIGHT 360
+#define MAX_RAY               32
 
 #define RADIAN(x) ((x) * M_PI/180.f)
 
@@ -34,22 +36,30 @@ struct state {
 };
 
 static int map[] = {
-    1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,
-    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,
-    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,1,1,1,0,0,1,1,1,
-    1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,
-    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,2,2,2,2,2,0,0,0,0,3,0,3,0,3,0,0,0,1,
+    1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,3,0,0,0,3,0,0,0,1,
+    1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,2,2,0,2,2,0,0,0,0,3,0,3,0,3,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,0,4,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,0,0,0,0,5,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,0,4,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,0,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 };
 
 static void
@@ -162,34 +172,78 @@ static void
 render ( struct state *s ) {
     Uint32 pixels[s->screen_width*s->screen_height];
 
-    // draw the ceiling and floor
-    int horizon = s->screen_width * s->screen_height * 0.5f;
+    // draw the ceiling and floor in shades of grey
+    int horizon = (s->screen_width * s->screen_height) >> 1;
     memset( pixels, 0xCC, sizeof(Uint32) * horizon );
     memset( pixels + horizon, 0x55, sizeof(Uint32) * horizon );
     
+    // compute start angle for FOV and the angle increment per screen column
     float a = s->player.theta - FIELD_OF_VIEW/2;
     float da = (float) FIELD_OF_VIEW/s->screen_width;
-    float max_ray = MAP_HEIGHT;
-    float ray_step = (float)1.0f/128;
-
+    float dist2plane = (s->screen_width/2.0f)/tan(RADIAN(FIELD_OF_VIEW/2.0f));
+    
     // cast rays
-    for ( int i=0; i < s->screen_width; i++, a += da ) {                
-        float dx = cos(RADIAN(a)) * ray_step;
-        float dy = sin(RADIAN(a)) * ray_step;
-        float x = s->player.x, y = s->player.y;
-        float dist = 0;
+    for ( int i=0; i < s->screen_width; i++, a += da ) {        
+        // figure out direction and displacement of ray in x and y directions
+        float vx = cos(RADIAN(a));
+        float vy = sin(RADIAN(a));
+                
+        // map cells
+        int ix = s->player.x;
+        int iy = s->player.y;
+       
+        // figure out ray x and y deltas
+        float dx = fabs(1.0/vx);
+        float dy = fabs(1.0/vy);
 
-        while ( dist < max_ray && empty_cell( x, y ) ) {            
-            x += dx; y += dy;            
-            dist += ray_step;
+        // figure out integer steps for map cells
+        int stepix = (vx < 0)? -1 : 1;
+        int stepiy = (vy < 0)? -1 : 1;
+
+        // initialize ray distance to displacement from next cell edge
+        float distx = (vx < 0)? (s->player.x-ix)*dx : (ix+1.0-s->player.x)*dx;
+        float disty = (vy < 0)? (s->player.y-iy)*dy : (iy+1.0-s->player.y)*dy;
+
+        int side;
+
+        // extend ray until it hits something or until it exceeds max view dist
+        while ( empty_cell( ix, iy ) ) {
+            if ( distx < disty ) {
+                distx += dx;
+                ix += stepix;                
+                side = 0;
+            } else {
+                disty += dy;
+                iy += stepiy;
+                side = 1;
+            }
         }
 
-        // only render if ray hit something
-        if ( dist < max_ray ) { 
-            int height = s->screen_height/MAX(1.0f, dist);
-            int wall_top = (s->screen_height - height)/2;
-            fill_column( pixels, s->screen_width, 0xFF, i, wall_top, height );
-        };
+        float dist;
+        if ( side ) {
+            dist = (iy - s->player.y + (1 - stepiy)/2)/vy;
+        } else {
+            dist = (ix - s->player.x + (1 - stepix)/2)/vx;
+        }
+
+        dist = dist * cos(RADIAN((-FIELD_OF_VIEW/2.0f)+(i*da)));
+        
+        int h = dist2plane/dist;        
+        int top = (s->screen_height - h) >> 1;
+        if ( top < 0 ) { top = 0; }
+        if ( top + h > s->screen_height ) { h = s->screen_height - top; }
+
+        Uint32 colour;                        
+        switch (map[ix + iy * MAP_WIDTH]) {
+            case 1:  colour = 0x2b4570; break;
+            case 2:  colour = 0x5d737e; break;
+            case 3:  colour = 0x58a4b0; break;
+            case 4:  colour = 0x373f51; break;
+            case 5:  colour = 0xe49273; break;
+            default: colour = 0x0000FF; break;
+        }
+
+        fill_column( pixels, s->screen_width, colour >> side, i, top, h );
     }
 
     // copy pixel buffer to texture and update the display
@@ -215,14 +269,13 @@ main ( int argc, char *argv[] ) {
         terminate(&s);
         return 1;
     }
-
-    Uint32 start = SDL_GetTicks();
+    
     while (!s.quit) {
-        if ( (SDL_GetTicks() - start) > 1000/FRAMES_PER_SECOND     ) {
-            handle_events(&s);
-            render(&s);
-            start = SDL_GetTicks();
-        }
+        Uint32 start = SDL_GetTicks();
+        handle_events(&s);
+        render(&s);
+        Sint32 delay = MS_PER_FRAME - (SDL_GetTicks() - start);
+        SDL_Delay(MAX(delay, 0));
     }
 
     terminate(&s);
