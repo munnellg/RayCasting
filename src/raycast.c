@@ -19,6 +19,8 @@
 #define MAX(x,y) (((x)>(y))? (x) : (y))
 #define MIN(x,y) (((x)<(y))? (x) : (y))
 
+#define NON_ZERO(x) (((x)==0)? 0.000001f : (x))
+
 struct actor {
     float x, y, theta, turn_speed, move_speed;
 };
@@ -178,63 +180,72 @@ render ( struct state *s ) {
     memset( pixels + horizon, 0x55, sizeof(Uint32) * horizon );
     
     // compute start angle for FOV and the angle increment per screen column
-    float a = s->player.theta - FIELD_OF_VIEW/2;
-    float da = (float) FIELD_OF_VIEW/s->screen_width;
-    float dist2plane = (s->screen_width/2.0f)/tan(RADIAN(FIELD_OF_VIEW/2.0f));
+    // float a = s->player.theta - FIELD_OF_VIEW/2;
+    // float da = (float) FIELD_OF_VIEW/s->screen_width;
+    // float dist2plane = (s->screen_width/2.0f)/tan(RADIAN(FIELD_OF_VIEW/2.0f));
     
+    // compute vectors for camera transformations
+    float pvx = cos(RADIAN(s->player.theta));      // player direction vector
+    float pvy = sin(RADIAN(s->player.theta));    
+    float cvx = cos(RADIAN(s->player.theta + 90)); // camera direction vector
+    float cvy = sin(RADIAN(s->player.theta + 90));
+
     // cast rays
-    for ( int i=0; i < s->screen_width; i++, a += da ) {        
+    for ( int i=0; i < s->screen_width; i++ /*, a += da*/ ) {        
+        float c = 2 * (float) i/s->screen_width - 1;  // camera space        
+        float vx = pvx + cvx * c;                       // ray direction vector
+        float vy = pvy + cvy * c;
         // figure out direction and displacement of ray in x and y directions
-        float vx = cos(RADIAN(a));
-        float vy = sin(RADIAN(a));
-                
+        // float vx = cos(RADIAN(a));
+        // float vy = sin(RADIAN(a));
+
         // map cells
-        int ix = s->player.x;
-        int iy = s->player.y;
+        int x = s->player.x;
+        int y = s->player.y;
        
         // figure out ray x and y deltas
-        float dx = fabs(1.0/vx);
-        float dy = fabs(1.0/vy);
+        float dx = fabs(1.0f/NON_ZERO(vx));
+        float dy = fabs(1.0f/NON_ZERO(vy));
 
-        // figure out integer steps for map cells
-        int stepix = (vx < 0)? -1 : 1;
-        int stepiy = (vy < 0)? -1 : 1;
+        // figure out integer steps for map cells        
+        int stepx = 1 - 2 * (vx < 0);
+        int stepy = 1 - 2 * (vy < 0);
 
         // initialize ray distance to displacement from next cell edge
-        float distx = (vx < 0)? (s->player.x-ix)*dx : (ix+1.0-s->player.x)*dx;
-        float disty = (vy < 0)? (s->player.y-iy)*dy : (iy+1.0-s->player.y)*dy;
-
+        float distx = (vx < 0)? (s->player.x-x)*dx : (x+1-s->player.x)*dx;
+        float disty = (vy < 0)? (s->player.y-y)*dy : (y+1-s->player.y)*dy;
+        
         int side;
 
         // extend ray until it hits something or until it exceeds max view dist
-        while ( empty_cell( ix, iy ) ) {
+        while ( empty_cell( x, y ) ) {
             if ( distx < disty ) {
                 distx += dx;
-                ix += stepix;                
+                x += stepx;                
                 side = 0;
             } else {
                 disty += dy;
-                iy += stepiy;
+                y += stepy;
                 side = 1;
             }
         }
 
+        // perpendicular distance coupled with camera space adjustment to vx/vy
+        // means we don't need to do fisheye correction
         float dist;
-        if ( side ) {
-            dist = (iy - s->player.y + (1 - stepiy)/2)/vy;
-        } else {
-            dist = (ix - s->player.x + (1 - stepix)/2)/vx;
-        }
+        if ( side ) { dist = (y - s->player.y + (stepy < 0))/vy; }
+        else        { dist = (x - s->player.x + (stepx < 0))/vx; }
 
-        dist = dist * cos(RADIAN((-FIELD_OF_VIEW/2.0f)+(i*da)));
+        // fisheye correction for euclidean space
+        // dist = dist * cos(RADIAN((-FIELD_OF_VIEW/2.0f)+(i*da)));
         
-        int h = dist2plane/dist;        
+        int h = s->screen_height/dist;
         int top = (s->screen_height - h) >> 1;
         if ( top < 0 ) { top = 0; }
         if ( top + h > s->screen_height ) { h = s->screen_height - top; }
 
         Uint32 colour;                        
-        switch (map[ix + iy * MAP_WIDTH]) {
+        switch (map[x + y * MAP_WIDTH]) {
             case 1:  colour = 0x2b4570; break;
             case 2:  colour = 0x5d737e; break;
             case 3:  colour = 0x58a4b0; break;
